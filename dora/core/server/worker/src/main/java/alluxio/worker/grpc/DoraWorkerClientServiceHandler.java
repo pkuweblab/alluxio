@@ -25,14 +25,18 @@ import alluxio.grpc.CompleteFilePRequest;
 import alluxio.grpc.CompleteFilePResponse;
 import alluxio.grpc.CopyRequest;
 import alluxio.grpc.CopyResponse;
+import alluxio.grpc.CreateDirectoryPRequest;
+import alluxio.grpc.CreateDirectoryPResponse;
 import alluxio.grpc.CreateFilePRequest;
 import alluxio.grpc.CreateFilePResponse;
-import alluxio.grpc.FileFailure;
+import alluxio.grpc.DeletePRequest;
+import alluxio.grpc.DeletePResponse;
 import alluxio.grpc.GetStatusPRequest;
 import alluxio.grpc.GetStatusPResponse;
 import alluxio.grpc.GrpcUtils;
 import alluxio.grpc.ListStatusPRequest;
 import alluxio.grpc.ListStatusPResponse;
+import alluxio.grpc.LoadFileFailure;
 import alluxio.grpc.LoadFileRequest;
 import alluxio.grpc.LoadFileResponse;
 import alluxio.grpc.MoveRequest;
@@ -40,6 +44,8 @@ import alluxio.grpc.MoveResponse;
 import alluxio.grpc.ReadRequest;
 import alluxio.grpc.ReadResponse;
 import alluxio.grpc.ReadResponseMarshaller;
+import alluxio.grpc.RenamePRequest;
+import alluxio.grpc.RenamePResponse;
 import alluxio.grpc.RouteFailure;
 import alluxio.grpc.TaskStatus;
 import alluxio.underfs.UfsStatus;
@@ -62,6 +68,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Server side implementation of the gRPC dora worker interface.
@@ -119,20 +126,22 @@ public class DoraWorkerClientServiceHandler extends BlockWorkerGrpc.BlockWorkerI
   @Override
   public void loadFile(LoadFileRequest request, StreamObserver<LoadFileResponse> responseObserver) {
     try {
-      ListenableFuture<List<FileFailure>> failures =
-          mWorker.load(request.getFilesList(), request.getOptions());
+      ListenableFuture<List<LoadFileFailure>> failures =
+          mWorker.load(!request.getLoadMetadataOnly(), request.getUfsStatusList().stream().map(
+              UfsStatus::fromProto).collect(
+              Collectors.toList()), request.getOptions());
       ListenableFuture<LoadFileResponse> future = Futures.transform(failures, fail -> {
-        int numFiles = request.getFilesCount();
+        int numFiles = request.getUfsStatusCount();
         TaskStatus taskStatus = TaskStatus.SUCCESS;
         if (fail.size() > 0) {
           taskStatus = numFiles > fail.size() ? TaskStatus.PARTIAL_FAILURE : TaskStatus.FAILURE;
         }
         LoadFileResponse.Builder response = LoadFileResponse.newBuilder();
-        return response.addAllFiles(fail).setStatus(taskStatus).build();
+        return response.addAllFailures(fail).setStatus(taskStatus).build();
       }, GrpcExecutors.BLOCK_WRITER_EXECUTOR);
       RpcUtils.invoke(LOG, future, "loadFile", "request=%s", responseObserver, request);
     } catch (Exception e) {
-      LOG.debug(String.format("Failed to load file %s: ", request.getFilesList()), e);
+      LOG.debug(String.format("Failed to load file %s: ", request.getUfsStatusList()), e);
       responseObserver.onError(AlluxioRuntimeException.from(e).toGrpcStatusRuntimeException());
     }
   }
@@ -278,6 +287,55 @@ public class DoraWorkerClientServiceHandler extends BlockWorkerGrpc.BlockWorkerI
       responseObserver.onCompleted();
     } catch (Exception e) {
       LOG.error(String.format("Failed to complete file for %s: ", request.getPath()), e);
+      responseObserver.onError(AlluxioRuntimeException.from(e).toGrpcStatusRuntimeException());
+    }
+  }
+
+  @Override
+  public void remove(DeletePRequest request, StreamObserver<DeletePResponse> responseObserver) {
+    LOG.debug("Got Remove: {}", request);
+    try {
+      String ufsFullPath = request.getPath();
+
+      mWorker.delete(ufsFullPath, request.getOptions());
+      DeletePResponse response = DeletePResponse.newBuilder().build();
+      responseObserver.onNext(response);
+      responseObserver.onCompleted();
+    } catch (Exception e) {
+      LOG.error(String.format("Failed to delete file for %s: ", request.getPath()), e);
+      responseObserver.onError(AlluxioRuntimeException.from(e).toGrpcStatusRuntimeException());
+    }
+  }
+
+  @Override
+  public void rename(RenamePRequest request, StreamObserver<RenamePResponse> responseObserver) {
+    LOG.debug("Got rename: {}", request);
+    String src = request.getPath();
+    String dst = request.getDstPath();
+    try {
+      mWorker.rename(src, dst, request.getOptions());
+      RenamePResponse response = RenamePResponse.newBuilder().build();
+      responseObserver.onNext(response);
+      responseObserver.onCompleted();
+    } catch (Exception e) {
+      LOG.error(String.format("Failed to rename file for %s -> %s: ", src, dst), e);
+      responseObserver.onError(AlluxioRuntimeException.from(e).toGrpcStatusRuntimeException());
+    }
+  }
+
+  @Override
+  public void createDirectory(CreateDirectoryPRequest request,
+                              StreamObserver<CreateDirectoryPResponse> responseObserver) {
+    LOG.debug("Got CreateDirectory: {}", request);
+    try {
+      String ufsFullPath = request.getPath();
+
+      mWorker.createDirectory(ufsFullPath, request.getOptions());
+      CreateDirectoryPResponse response = CreateDirectoryPResponse.newBuilder().build();
+      responseObserver.onNext(response);
+      responseObserver.onCompleted();
+    } catch (Exception e) {
+      LOG.error(String.format("Failed to CreateDirectory for %s: ", request.getPath()), e);
       responseObserver.onError(AlluxioRuntimeException.from(e).toGrpcStatusRuntimeException());
     }
   }

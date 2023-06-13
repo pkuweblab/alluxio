@@ -2254,6 +2254,14 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
           .setScope(Scope.MASTER)
           .build();
+  public static final PropertyKey MASTER_SCHEDULER_INITIAL_DELAY =
+      durationBuilder(Name.MASTER_SCHEDULER_INITIAL_WAIT_TIME)
+          .setDefaultValue("10min")
+          .setDescription("The initial wait time before the scheduler starts. This grace period "
+          + "is added to make sure workers have registered to master successfully.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.MASTER)
+          .build();
   public static final PropertyKey MASTER_SHELL_BACKUP_STATE_LOCK_GRACE_MODE =
       enumBuilder(Name.MASTER_SHELL_BACKUP_STATE_LOCK_GRACE_MODE, GraceMode.class)
           .setDefaultValue(GraceMode.FORCED)
@@ -4153,7 +4161,7 @@ public final class PropertyKey implements Comparable<PropertyKey> {
   public static final PropertyKey WORKER_BLOCK_HEARTBEAT_INTERVAL_MS =
       durationBuilder(Name.WORKER_BLOCK_HEARTBEAT_INTERVAL_MS)
           .setAlias("alluxio.worker.block.heartbeat.interval.ms")
-          .setDefaultValue("1sec")
+          .setDefaultValue("10sec")
           .setDescription("The interval between block workers' heartbeats to update "
               + "block status, storage health and other workers' information to Alluxio Master.")
           .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
@@ -7763,7 +7771,7 @@ public final class PropertyKey implements Comparable<PropertyKey> {
   public static final PropertyKey USER_NETWORK_NETTY_WRITER_CLOSE_TIMEOUT_MS =
       durationBuilder(Name.USER_NETWORK_NETTY_WRITER_CLOSE_TIMEOUT_MS)
           .setAlias(new String[]{"alluxio.user.network.netty.writer.close.timeout.ms"})
-          .setDefaultValue("30min")
+          .setDefaultValue("3sec")
           .setDescription("The timeout to close a netty writer client.")
           .build();
 
@@ -8242,6 +8250,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio.master.backup.suspend.timeout";
     public static final String MASTER_BLOCK_SCAN_INVALID_BATCH_MAX_SIZE =
         "alluxio.master.block.scan.invalid.batch.max.size";
+    public static final String MASTER_SCHEDULER_INITIAL_WAIT_TIME =
+        "alluxio.master.scheduler.initial.wait.time";
     public static final String MASTER_SHELL_BACKUP_STATE_LOCK_GRACE_MODE =
         "alluxio.master.shell.backup.state.lock.grace.mode";
     public static final String MASTER_SHELL_BACKUP_STATE_LOCK_TRY_DURATION =
